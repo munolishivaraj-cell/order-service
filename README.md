@@ -1,69 +1,126 @@
-# Order Service — production-grade Spring Boot microservice
+# Order Service – production-grade Spring Boot microservice
 
-A REST order service built to show what "production-ready" means beyond the code:
-**automated tests against a real database, CI/CD, containerised deployment to AWS ECS, metrics, dashboards and distributed tracing.**
+**A REST API for orders, built the way production services are: tested against a real database, containerised, observable with metrics, dashboards and traces, and shipped through CI/CD to AWS ECS.**
 
-| Area | What's here |
-|---|---|
-| API | Spring Boot 3.5, Java 21 (virtual threads), REST + OpenAPI/Swagger, RFC 9457 Problem Details errors |
-| Data | PostgreSQL, Spring Data JPA, Flyway migrations, optimistic locking, N+1-safe queries |
-| Testing | JUnit 5 + Mockito unit tests, **Testcontainers** integration tests against real PostgreSQL, JaCoCo coverage |
-| CI/CD | **GitHub Actions**: build + test on every PR; on `main`, build image → push to ECR → rolling deploy to ECS |
-| Cloud | **AWS ECS Fargate** task definition, Secrets Manager for DB credentials, CloudWatch logs, ADOT collector sidecar |
-| Observability | **Prometheus** metrics (HTTP, JVM, DB pool, business metrics), **Grafana** dashboard, **OpenTelemetry** traces to **Jaeger**, trace IDs in logs |
+[![CI](https://github.com/munolishivaraj-cell/order-service/actions/workflows/ci.yml/badge.svg)](https://github.com/munolishivaraj-cell/order-service/actions/workflows/ci.yml)
+![Java](https://img.shields.io/badge/Java-21-orange?logo=openjdk)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F?logo=springboot&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![Flyway](https://img.shields.io/badge/Flyway-migrations-CC0200?logo=flyway&logoColor=white)
+![Testcontainers](https://img.shields.io/badge/Testcontainers-integration%20tests-25A162)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-metrics-E6522C?logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-dashboard-F46800?logo=grafana&logoColor=white)
+![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Jaeger-425CC7?logo=opentelemetry&logoColor=white)
+![AWS ECS](https://img.shields.io/badge/AWS-ECS%20Fargate-FF9900?logo=amazonwebservices&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+## What this demonstrates
+
+- **Clean REST API design** with Spring Boot 3.5 and **Java 21 virtual threads**: DTOs separated from entities, Bean Validation, paging, `201 Created` + `Location`, and RFC 9457 **Problem Details** errors (400 / 404 / 409).
+- **Domain rules in the domain model**: an order status state machine (`CREATED → PAID → SHIPPED → DELIVERED`, or `CANCELLED`) that rejects illegal transitions with `409 Conflict`.
+- **Solid persistence**: PostgreSQL with **Flyway** migrations, JPA **optimistic locking** (`@Version`, concurrent updates return 409), indexed queries and an `@EntityGraph` fetch to avoid N+1 queries.
+- **Testing pyramid**: JUnit 5 + Mockito unit tests, and **Testcontainers** integration tests that run the full HTTP → database flow against a real PostgreSQL. **JaCoCo** coverage report.
+- **Observability**: Micrometer metrics in **Prometheus** (HTTP latency percentiles, JVM, DB pool, business counters), a provisioned **Grafana** dashboard, and **OpenTelemetry** distributed traces in **Jaeger**, with trace IDs in every log line.
+- **Containers**: multi-stage Dockerfile with layered jar, non-root user and health check; one `docker compose` command starts the app with Postgres, Prometheus, Grafana and Jaeger.
+- **CI/CD with GitHub Actions**: build, test and Docker image on every push and PR; a deploy pipeline to **AWS ECS Fargate** via ECR using **OIDC** (no stored AWS keys), with Secrets Manager for DB credentials.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    Client -->|HTTP| App[order-service<br/>Spring Boot]
-    App -->|JDBC| PG[(PostgreSQL)]
-    Prom[Prometheus] -->|scrape /actuator/prometheus| App
-    Grafana --> Prom
-    App -->|OTLP traces| Jaeger
-    Grafana --> Jaeger
+    Client([Client / Swagger UI]) -->|REST /api/v1/orders| App
 
-    subgraph CI/CD
-      GH[GitHub Actions] -->|mvn verify<br/>Testcontainers| Tests
-      GH -->|docker push| ECR[(Amazon ECR)]
-      GH -->|deploy| ECS[ECS Fargate]
+    subgraph Local["docker compose"]
+        App["order-service<br/>Spring Boot 3.5 · Java 21"]
+        PG[("PostgreSQL 16<br/>Flyway schema")]
+        Prom[Prometheus]
+        Graf[Grafana]
+        Jaeger[Jaeger]
+        App -->|JPA / JDBC| PG
+        Prom -->|scrape /actuator/prometheus| App
+        App -->|OTLP traces| Jaeger
+        Graf --> Prom
+        Graf --> Jaeger
     end
+
+    subgraph CICD["GitHub Actions"]
+        CI["CI: mvn verify<br/>unit + Testcontainers tests<br/>docker build"]
+        CD["Deploy (manual):<br/>OIDC → ECR → ECS"]
+    end
+
+    subgraph AWS["AWS (deploy target)"]
+        ECR[(Amazon ECR)]
+        ECS[ECS Fargate + ALB]
+        RDS[(RDS PostgreSQL)]
+        SM[Secrets Manager]
+        XR[CloudWatch Logs / X-Ray]
+    end
+
+    CD --> ECR --> ECS
+    ECS --> RDS
+    SM -.->|DB credentials| ECS
+    ECS -.-> XR
 ```
 
-## Run locally (Windows / macOS / Linux)
+**Request flow:** `OrderController` (validation, HTTP) → `OrderService` (transactions, metrics, `@Observed` spans) → `Order` aggregate (business rules, state machine) → `OrderRepository` (Spring Data JPA) → PostgreSQL.
 
-Needs Docker Desktop only.
+## Tech stack
+
+Java 21 · Spring Boot 3.5 (Web, Data JPA, Validation, Actuator) · PostgreSQL 16 · Flyway · springdoc-openapi (Swagger UI) · Micrometer + Prometheus · Grafana · OpenTelemetry + Jaeger · JUnit 5 · Mockito · Testcontainers · JaCoCo · Docker / Docker Compose · GitHub Actions · AWS ECS Fargate, ECR, RDS, Secrets Manager
+
+## Run it locally (Windows)
+
+**Prerequisite:** [Docker Desktop](https://www.docker.com/products/docker-desktop/) only. The app is built inside Docker, so no JDK or Maven is needed to run it.
+
+Open **PowerShell** in the project folder:
 
 ```powershell
-cd order-service
+# 1. Build and start the app, PostgreSQL, Prometheus, Grafana and Jaeger
 docker compose up -d --build
+
+# 2. Check everything is up (app shows "healthy" after ~30 s)
+docker compose ps
+
+# 3. Generate orders and status changes so the dashboards and traces have data (Ctrl+C to stop)
+.\scripts\generate-traffic.ps1
 ```
 
-| URL | What |
+| URL | What you'll see |
 |---|---|
-| http://localhost:8080/swagger-ui.html | API docs, try requests here |
-| http://localhost:8080/actuator/health | Health (liveness/readiness under `/health/liveness`, `/health/readiness`) |
-| http://localhost:8080/actuator/prometheus | Raw metrics |
-| http://localhost:9090 | Prometheus |
-| http://localhost:3000 | Grafana (admin / admin) → Dashboards → *Order Service* |
-| http://localhost:16686 | Jaeger traces (service: `order-service`) |
+| http://localhost:8080/swagger-ui.html | Interactive API docs; try every endpoint here |
+| http://localhost:8080/actuator/health | Health (`/health/liveness`, `/health/readiness` for orchestrators) |
+| http://localhost:9090/targets | Prometheus: the `order-service` target should be **UP** |
+| http://localhost:3000 | Grafana (admin / admin) → Dashboards → **Order Service** |
+| http://localhost:16686 | Jaeger: service `order-service`, operations `create-order`, `change-order-status` |
 
-> Port 8080 must be free. If another app (e.g. your RAG service) is running on 8080, stop it first or change `"8080:8080"` to `"8081:8080"` in `docker-compose.yml`.
+Stop everything with `docker compose down` (add `-v` to also delete the database).
 
-Stop everything: `docker compose down` (add `-v` to also delete the database).
+> Port 8080 must be free. If PowerShell blocks the script, run `powershell -ExecutionPolicy Bypass -File .\scripts\generate-traffic.ps1`. Use `-Rounds 50` to stop after 50 orders.
 
-### Run from your IDE instead
+<details>
+<summary><b>Run the app from your IDE instead (needs JDK 21)</b></summary>
 
 ```powershell
 docker compose up -d postgres prometheus grafana jaeger
 mvn spring-boot:run
 ```
-The app connects to Postgres on `localhost:5433` (5433 so it doesn't clash with a local Postgres on 5432).
-To get metrics in Prometheus/Grafana in this mode, switch the scrape target in `observability/prometheus/prometheus.yml` to `host.docker.internal:8080` and run `docker compose restart prometheus`.
 
-## Try the API
+The app connects to Postgres on `localhost:5433` (5433 so it doesn't clash with a local Postgres on 5432). For metrics in this mode, change the scrape target in `observability/prometheus/prometheus.yml` to `host.docker.internal:8080` and run `docker compose restart prometheus`.
+</details>
 
-PowerShell:
+## API
+
+| Method | Endpoint | Description | Responses |
+|---|---|---|---|
+| `POST` | `/api/v1/orders` | Create an order | `201` + `Location` header, `400` validation error |
+| `GET` | `/api/v1/orders/{id}` | Get an order with its items | `200`, `404` |
+| `GET` | `/api/v1/orders?customerId=&page=&size=` | List orders, newest first, paged | `200` |
+| `PATCH` | `/api/v1/orders/{id}/status` | Change status (`PAID`, `SHIPPED`, `DELIVERED`, `CANCELLED`) | `200`, `404`, `409` illegal transition or concurrent update |
+
+Status lifecycle: `CREATED → PAID → SHIPPED → DELIVERED`; `CREATED` and `PAID` orders can also be `CANCELLED`.
+
+### Example requests (PowerShell)
 
 ```powershell
 # Create an order
@@ -74,103 +131,109 @@ $order = Invoke-RestMethod -Method Post http://localhost:8080/api/v1/orders -Con
     {"productCode": "SKU-2", "quantity": 1, "unitPrice": 5.00}
   ]
 }'
-$order
+$order            # status CREATED, totalAmount 44.98
 
 # Get it
 Invoke-RestMethod http://localhost:8080/api/v1/orders/$($order.id)
 
-# Move it through the lifecycle: CREATED -> PAID -> SHIPPED -> DELIVERED (or CANCELLED)
+# Pay it
 Invoke-RestMethod -Method Patch http://localhost:8080/api/v1/orders/$($order.id)/status -ContentType "application/json" -Body '{"status":"PAID"}'
 
-# List a customer's orders (paged)
+# List a customer's orders
 Invoke-RestMethod "http://localhost:8080/api/v1/orders?customerId=cust-42&page=0&size=10"
 ```
 
-curl (Git Bash / Linux / macOS):
+Errors use Problem Details JSON, for example a validation failure:
 
-```bash
-curl -X POST localhost:8080/api/v1/orders -H 'Content-Type: application/json' \
-  -d '{"customerId":"cust-42","items":[{"productCode":"SKU-1","quantity":2,"unitPrice":19.99}]}'
-```
-
-Generate some traffic, then open Grafana and Jaeger to see the requests, latency percentiles and traces.
-
-### Endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| POST | `/api/v1/orders` | Create order → `201 Created` + `Location` header |
-| GET | `/api/v1/orders/{id}` | Order with items, `404` if missing |
-| GET | `/api/v1/orders?customerId=&page=&size=` | Paged list, newest first |
-| PATCH | `/api/v1/orders/{id}/status` | Status change; illegal transitions → `409 Conflict` |
-
-Errors use Problem Details JSON, e.g. a validation failure:
 ```json
-{ "status": 400, "title": "Validation failed", "detail": "One or more fields are invalid",
-  "errors": { "customerId": "must not be blank", "items": "must not be empty" } }
+{
+  "status": 400,
+  "title": "Validation failed",
+  "detail": "One or more fields are invalid",
+  "errors": { "customerId": "must not be blank", "items": "must not be empty" }
+}
 ```
 
 ## Tests
 
 ```powershell
 mvn test      # unit tests only (fast, no Docker)
-mvn verify    # unit + Testcontainers integration tests (Docker must be running) + coverage
+mvn verify    # unit + Testcontainers integration tests (Docker must be running) + JaCoCo report
 ```
 
-- `OrderTest` — domain rules (totals, status lifecycle) with no Spring context.
-- `OrderServiceTest` — service logic with a mocked repository; checks business metrics are recorded.
-- `OrderApiIT` — full HTTP → DB tests against a real PostgreSQL started by **Testcontainers**, including Flyway migrations, validation errors, 404/409 handling and the Prometheus endpoint.
+| Test | Type | What it checks |
+|---|---|---|
+| [`OrderTest`](src/test/java/com/shivaraj/orderservice/order/OrderTest.java) | Unit, no Spring | totals, status state machine, illegal transitions |
+| [`OrderServiceTest`](src/test/java/com/shivaraj/orderservice/order/OrderServiceTest.java) | Unit, Mockito | service logic with a mocked repository, business metrics recorded |
+| [`OrderApiIT`](src/test/java/com/shivaraj/orderservice/order/OrderApiIT.java) | Integration, **Testcontainers** | full HTTP → JPA → real PostgreSQL with Flyway: create/get/list, 400/404/409, Prometheus endpoint |
 
-Coverage report: `target/site/jacoco/index.html`.
+Coverage report: `target/site/jacoco/index.html`. CI runs the full `mvn verify` (including Testcontainers) on every push and pull request.
 
 ## Observability
 
-**Metrics** (Micrometer → Prometheus): `http_server_requests_seconds` (rate, p95/p99 latency per endpoint), JVM memory/GC, HikariCP pool, plus business metrics `orders_placed_total` and `orders_status_changed_total{from,to}`.
+| Signal | How | Where to look |
+|---|---|---|
+| **Metrics** | Micrometer → Prometheus: `http_server_requests_seconds` (rate, p95/p99), JVM memory, HikariCP pool, business counters `orders_placed_total` and `orders_status_changed_total{from,to}` | http://localhost:9090 |
+| **Dashboard** | [`order-service.json`](observability/grafana/dashboards/order-service.json), provisioned automatically: orders created, requests/sec, 5xx rate, latency p95/p99, status changes, heap, DB pool, service-method latency | http://localhost:3000 |
+| **Traces** | Micrometer Tracing → OpenTelemetry OTLP → Jaeger; `@Observed` adds `create-order` / `change-order-status` spans | http://localhost:16686 |
+| **Logs** | Every line includes `[order-service,<traceId>,<spanId>]`, so a log line can be matched to its trace | `docker compose logs app` |
 
-**Dashboard**: `observability/grafana/dashboards/order-service.json` is provisioned automatically — orders created, requests/sec, 5xx error rate, latency percentiles, status transitions, heap, DB pool.
+## CI/CD
 
-**Tracing** (Micrometer Tracing → OpenTelemetry OTLP → Jaeger): every request gets a trace; `@Observed` on service methods adds `create-order` / `change-order-status` spans. Logs include `[order-service,<traceId>,<spanId>]`, so a log line can be matched to its trace.
+- **[`ci.yml`](.github/workflows/ci.yml)** runs automatically on every push and pull request: `mvn verify` (unit + Testcontainers), uploads test and coverage reports, and builds the Docker image.
+- **[`deploy.yml`](.github/workflows/deploy.yml)** deploys to AWS ECS. It is **manual only** (`workflow_dispatch`): open the **Actions** tab → **Deploy to AWS ECS** → **Run workflow**. It logs in to AWS with **OIDC** (no stored keys), builds and pushes the image to **ECR** tagged with the commit SHA, renders the ECS task definition and does a rolling deploy that waits until the service is healthy.
 
-## CI/CD (GitHub Actions)
+## Deploy to AWS ECS
 
-- `.github/workflows/ci.yml` — on every push and PR: `mvn verify` (unit + Testcontainers), upload test and coverage reports, build the Docker image.
-- `.github/workflows/deploy.yml` — after CI succeeds on `main` (or manual run): AWS login via **OIDC** (no stored keys) → build & push image to **ECR** tagged with the commit SHA → render the ECS task definition → rolling deploy and wait for the service to be healthy.
+> **Why the deploy is manual:** deploying needs the one-time AWS setup below (ECR, RDS, ECS, IAM roles and the `AWS_DEPLOY_ROLE_ARN` secret). Running it only on demand means the repository never shows failed deploy runs before AWS exists, and nothing deploys or costs money unless you start it. To deploy on every push to `main` later, add a `workflow_run` trigger on the CI workflow to `deploy.yml`.
 
-## Deploy to AWS ECS (one-time setup)
+One-time setup (region in the workflow is `eu-central-1`; change `AWS_REGION` for another region):
 
-Region in the workflow is `eu-central-1` (Frankfurt); change `AWS_REGION` for another region.
-
-1. **ECR repository**
-   ```bash
-   aws ecr create-repository --repository-name order-service
-   ```
-2. **Database**: create an RDS PostgreSQL 16 instance with a database `orders`. Store the credentials in Secrets Manager as `order-service/db` with keys `username` and `password`.
-3. **ECS**: create a Fargate cluster `order-service-cluster`, and an Application Load Balancer whose target group health check path is `/actuator/health/readiness`.
-4. **IAM**
+1. **ECR repository:** `aws ecr create-repository --repository-name order-service`
+2. **Database:** create an RDS PostgreSQL 16 instance with a database `orders`. Store the credentials in Secrets Manager as `order-service/db` with keys `username` and `password`.
+3. **ECS:** create a Fargate cluster `order-service-cluster` and an Application Load Balancer whose target group health check path is `/actuator/health/readiness`.
+4. **IAM:**
    - `ecsTaskExecutionRole` with `AmazonECSTaskExecutionRolePolicy` + `secretsmanager:GetSecretValue` on the DB secret.
-   - `orderServiceTaskRole` with `AWSXrayWriteOnlyAccess` (for the OTel collector sidecar).
-   - A GitHub OIDC deploy role trusted for your repo, allowed to push to ECR and update the ECS service. Save its ARN as the repo secret **`AWS_DEPLOY_ROLE_ARN`**.
-   - Add the repo **variable** `DEPLOY_ENABLED` = `true` to turn on automatic deploys after CI passes on `main` (until then, deploy only runs when started by hand from the Actions tab).
-5. **Task definition**: replace the `<AWS_ACCOUNT_ID>`, `<AWS_REGION>` and `<RDS_ENDPOINT>` placeholders in `infra/ecs/task-definition.json`, register it once, and create the ECS service `order-service` behind the ALB:
+   - `orderServiceTaskRole` with `AWSXrayWriteOnlyAccess` (for the OpenTelemetry collector sidecar).
+   - A GitHub OIDC deploy role trusted for this repo, allowed to push to ECR and update the ECS service. Save its ARN as the repository secret **`AWS_DEPLOY_ROLE_ARN`**.
+5. **Task definition:** replace the `<AWS_ACCOUNT_ID>`, `<AWS_REGION>` and `<RDS_ENDPOINT>` placeholders in [`infra/ecs/task-definition.json`](infra/ecs/task-definition.json), register it once and create the ECS service `order-service` behind the ALB:
    ```bash
    aws ecs register-task-definition --cli-input-json file://infra/ecs/task-definition.json
    ```
-6. Push to `main` — GitHub Actions deploys every new commit from then on.
+6. Run **Deploy to AWS ECS** from the Actions tab.
 
-> Cost tip: Fargate + RDS + ALB is not free-tier. Bring it up for a demo/screenshots, then scale the service to 0 and stop RDS.
+In ECS, traces go through the AWS Distro for OpenTelemetry sidecar to **AWS X-Ray**, logs go to **CloudWatch** (`/ecs/order-service`), and trace sampling is 10% (`TRACING_SAMPLING`).
 
-In ECS, traces go to the AWS Distro for OpenTelemetry sidecar → **AWS X-Ray**, logs go to **CloudWatch** (`/ecs/order-service`), and the 10% trace sampling rate is set via `TRACING_SAMPLING`.
+> Cost tip: Fargate + RDS + ALB is not free-tier. Bring it up for a demo, then scale the service to 0 and stop RDS.
+
+## Screenshots
+
+> Images go in [`docs/screenshots/`](docs/screenshots/). Start the stack, run `.\scripts\generate-traffic.ps1` for a few minutes, then save the screenshots with these exact names.
+
+| Screenshot | What to capture |
+|---|---|
+| ![Grafana dashboard](docs/screenshots/grafana-order-service-dashboard.png) | `grafana-order-service-dashboard.png`: the **Order Service** dashboard with traffic (time range "Last 15 minutes") |
+| ![Jaeger trace](docs/screenshots/jaeger-trace-create-order.png) | `jaeger-trace-create-order.png`: a `POST /api/v1/orders` trace opened in Jaeger, showing the HTTP span and the nested `create-order` span |
+| ![Swagger UI](docs/screenshots/swagger-ui-orders-api.png) | `swagger-ui-orders-api.png`: http://localhost:8080/swagger-ui.html with the Orders endpoints expanded |
+| ![Prometheus targets](docs/screenshots/prometheus-target-up.png) | `prometheus-target-up.png`: http://localhost:9090/targets showing `order-service` **UP** |
+| ![CI](docs/screenshots/github-actions-ci-green.png) | `github-actions-ci-green.png`: a green CI run on the Actions tab with the test summary |
+| ![Traffic script](docs/screenshots/generate-traffic-terminal.png) | `generate-traffic-terminal.png`: PowerShell running `.\scripts\generate-traffic.ps1` |
 
 ## Project layout
 
 ```
-src/main/java/.../order/      domain, repository, service, controller, DTOs
-src/main/java/.../web/        global error handling (Problem Details)
-src/main/resources/db/migration   Flyway SQL migrations
-src/test/java/                unit tests (*Test) and Testcontainers integration tests (*IT)
-observability/                Prometheus config, Grafana datasources + dashboard
-infra/ecs/                    ECS Fargate task definition
-.github/workflows/            CI and deploy pipelines
-Dockerfile                    multi-stage, layered jar, non-root, healthcheck
-docker-compose.yml            app + Postgres + Prometheus + Grafana + Jaeger
+src/main/java/.../order/          domain model, repository, service, controller, DTOs
+src/main/java/.../web/            global error handling (Problem Details)
+src/main/resources/db/migration/  Flyway SQL migrations
+src/test/java/                    unit tests (*Test) and Testcontainers integration tests (*IT)
+observability/                    Prometheus config, Grafana datasources + dashboard
+infra/ecs/                        ECS Fargate task definition
+scripts/generate-traffic.ps1      demo traffic for Grafana and Jaeger
+.github/workflows/                CI and deploy pipelines
+Dockerfile                        multi-stage, layered jar, non-root, health check
+docker-compose.yml                app + Postgres + Prometheus + Grafana + Jaeger
 ```
+
+## License
+
+[MIT](LICENSE) © Shivaraj Apparao Munoli
