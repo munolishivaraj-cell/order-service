@@ -1,0 +1,64 @@
+{
+  "family": "order-service",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "executionRoleArn": "arn:aws:iam::<AWS_ACCOUNT_ID>:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::<AWS_ACCOUNT_ID>:role/orderServiceTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "order-service",
+      "image": "placeholder-replaced-by-github-actions",
+      "essential": true,
+      "portMappings": [
+        { "containerPort": 8080, "protocol": "tcp" }
+      ],
+      "environment": [
+        { "name": "DB_URL", "value": "jdbc:postgresql://<RDS_ENDPOINT>:5432/orders" },
+        { "name": "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "value": "http://localhost:4318/v1/traces" },
+        { "name": "TRACING_SAMPLING", "value": "0.1" }
+      ],
+      "secrets": [
+        { "name": "DB_USERNAME", "valueFrom": "arn:aws:secretsmanager:<AWS_REGION>:<AWS_ACCOUNT_ID>:secret:order-service/db:username::" },
+        { "name": "DB_PASSWORD", "valueFrom": "arn:aws:secretsmanager:<AWS_REGION>:<AWS_ACCOUNT_ID>:secret:order-service/db:password::" }
+      ],
+      "healthCheck": {
+        "command": ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/liveness || exit 1"],
+        "interval": 15,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "stopTimeout": 30,
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/order-service",
+          "awslogs-region": "<AWS_REGION>",
+          "awslogs-stream-prefix": "app",
+          "awslogs-create-group": "true"
+        }
+      }
+    },
+    {
+      "name": "aws-otel-collector",
+      "image": "public.ecr.aws/aws-observability/aws-otel-collector:latest",
+      "essential": false,
+      "command": ["--config=/etc/ecs/ecs-default-config.yaml"],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/order-service",
+          "awslogs-region": "<AWS_REGION>",
+          "awslogs-stream-prefix": "otel",
+          "awslogs-create-group": "true"
+        }
+      }
+    }
+  ]
+}

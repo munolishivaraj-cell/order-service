@@ -1,0 +1,13 @@
+global:
+  scrape_interval: 10s
+
+scrape_configs:
+  - job_name: order-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      # "app" when the service runs in docker compose (the default).
+      # Running the app from your IDE instead? Swap the two lines below, then
+      # `docker compose restart prometheus`. Keep only one target: both point at
+      # the same app under compose, so listing both doubles every sum() in Grafana.
+      - targets: ["app:8080"]
+      # - targets: ["host.docker.internal:8080"]
