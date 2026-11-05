@@ -1,7 +1,28 @@
+# Build output
 target/
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE
 .idea/
 *.iml
+*.ipr
+*.iws
 .vscode/
-.DS_Store
-*.log
+.classpath
+.project
+.settings/
+.factorypath
+bin/
+out/
+
+# Secrets / local environment
 .env
+.env.*
+!.env.example
+
+# Logs and OS files
+*.log
+logs/
+.DS_Store
+Thumbs.db
+
