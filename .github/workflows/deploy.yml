@@ -1,11 +1,9 @@
 name: Deploy to AWS ECS
 
-# Runs after CI passes on main, or manually from the Actions tab.
+# Manual only: Actions tab -> "Deploy to AWS ECS" -> Run workflow.
+# Needs the one-time AWS setup in the README first; until then nothing runs automatically,
+# so the repo never shows failed deploy runs.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -22,8 +20,6 @@ env:
 
 jobs:
   deploy:
-    # Auto-deploy only once AWS is set up: add repo variable DEPLOY_ENABLED=true (Settings > Secrets and variables > Actions > Variables)
-    if: ${{ github.event_name == 'workflow_dispatch' || (vars.DEPLOY_ENABLED == 'true' && github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     environment: production
     steps:
