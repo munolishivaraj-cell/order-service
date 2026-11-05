@@ -150,6 +150,7 @@ Region in the workflow is `eu-central-1` (Frankfurt); change `AWS_REGION` for an
    - `ecsTaskExecutionRole` with `AmazonECSTaskExecutionRolePolicy` + `secretsmanager:GetSecretValue` on the DB secret.
    - `orderServiceTaskRole` with `AWSXrayWriteOnlyAccess` (for the OTel collector sidecar).
    - A GitHub OIDC deploy role trusted for your repo, allowed to push to ECR and update the ECS service. Save its ARN as the repo secret **`AWS_DEPLOY_ROLE_ARN`**.
+   - Add the repo **variable** `DEPLOY_ENABLED` = `true` to turn on automatic deploys after CI passes on `main` (until then, deploy only runs when started by hand from the Actions tab).
 5. **Task definition**: replace the `<AWS_ACCOUNT_ID>`, `<AWS_REGION>` and `<RDS_ENDPOINT>` placeholders in `infra/ecs/task-definition.json`, register it once, and create the ECS service `order-service` behind the ALB:
    ```bash
    aws ecs register-task-definition --cli-input-json file://infra/ecs/task-definition.json

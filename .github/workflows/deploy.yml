@@ -22,7 +22,8 @@ env:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # Auto-deploy only once AWS is set up: add repo variable DEPLOY_ENABLED=true (Settings > Secrets and variables > Actions > Variables)
+    if: ${{ github.event_name == 'workflow_dispatch' || (vars.DEPLOY_ENABLED == 'true' && github.event.workflow_run.conclusion == 'success') }}
     runs-on: ubuntu-latest
     environment: production
     steps:
