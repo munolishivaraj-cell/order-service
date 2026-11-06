@@ -229,7 +229,7 @@ Interactive OpenAPI docs at http://localhost:8080/swagger-ui.html.
 ![Prometheus targets page showing order-service UP](docs/screenshots/prometheus-target-up.png)
 
 ### GitHub Actions – green CI run
-Build, unit tests, Testcontainers integration tests and Docker image on every push, with a test summary on the run page.
+Build, unit tests, Testcontainers integration tests and Docker image on every push; test and JaCoCo coverage reports are kept as artifacts, and a test-results table is added to each run summary.
 
 ![Green GitHub Actions CI run with test summary](docs/screenshots/github-actions-ci-green.png)
 

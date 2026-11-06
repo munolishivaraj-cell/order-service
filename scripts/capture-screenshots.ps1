@@ -121,7 +121,7 @@ Save-WindowShot "generate-traffic-terminal.png"
 
 # ---------- 4. Swagger, Prometheus, Jaeger ----------------------------------
 Write-Step "Capturing Swagger UI"
-Save-PageShot "http://localhost:8080/swagger-ui/index.html#/Orders" "swagger-ui-orders-api.png" 1600 1250
+Save-PageShot "http://localhost:8080/swagger-ui/index.html" "swagger-ui-orders-api.png" 1600 1050
 
 Write-Step "Capturing Prometheus targets"
 Wait-Until "Prometheus to report order-service UP" {

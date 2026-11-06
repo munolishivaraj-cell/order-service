@@ -21,6 +21,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"   # no "Reading web response" progress bar, and faster requests
 $orders = "$BaseUrl/api/v1/orders"
 $customers = "alice", "bob", "carol", "dave", "erin", "frank"
 $products = @{ "SKU-KEYBOARD" = 49.99; "SKU-MOUSE" = 19.50; "SKU-MONITOR" = 189.00; "SKU-CABLE" = 6.25; "SKU-DOCK" = 129.90 }
