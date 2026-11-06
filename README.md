@@ -208,16 +208,37 @@ In ECS, traces go through the AWS Distro for OpenTelemetry sidecar to **AWS X-Ra
 
 ## Screenshots
 
-> Images go in [`docs/screenshots/`](docs/screenshots/). Start the stack, run `.\scripts\generate-traffic.ps1` for a few minutes, then save the screenshots with these exact names.
+### Grafana – Order Service dashboard
+Request rate, p95/p99 latency, error rate, JVM and connection-pool panels, plus business counters, while `generate-traffic.ps1` runs.
 
-| Screenshot | What to capture |
-|---|---|
-| ![Grafana dashboard](docs/screenshots/grafana-order-service-dashboard.png) | `grafana-order-service-dashboard.png`: the **Order Service** dashboard with traffic (time range "Last 15 minutes") |
-| ![Jaeger trace](docs/screenshots/jaeger-trace-create-order.png) | `jaeger-trace-create-order.png`: a `POST /api/v1/orders` trace opened in Jaeger, showing the HTTP span and the nested `create-order` span |
-| ![Swagger UI](docs/screenshots/swagger-ui-orders-api.png) | `swagger-ui-orders-api.png`: http://localhost:8080/swagger-ui.html with the Orders endpoints expanded |
-| ![Prometheus targets](docs/screenshots/prometheus-target-up.png) | `prometheus-target-up.png`: http://localhost:9090/targets showing `order-service` **UP** |
-| ![CI](docs/screenshots/github-actions-ci-green.png) | `github-actions-ci-green.png`: a green CI run on the Actions tab with the test summary |
-| ![Traffic script](docs/screenshots/generate-traffic-terminal.png) | `generate-traffic-terminal.png`: PowerShell running `.\scripts\generate-traffic.ps1` |
+![Grafana Order Service dashboard](docs/screenshots/grafana-order-service-dashboard.png)
+
+### Jaeger – distributed trace of `POST /api/v1/orders`
+The HTTP server span with the nested `create-order` span from `@Observed` and the JDBC work underneath.
+
+![Jaeger trace for POST /api/v1/orders](docs/screenshots/jaeger-trace-create-order.png)
+
+### Swagger UI – Orders API
+Interactive OpenAPI docs at http://localhost:8080/swagger-ui.html.
+
+![Swagger UI with the Orders endpoints](docs/screenshots/swagger-ui-orders-api.png)
+
+### Prometheus – scrape target UP
+`order-service` scraped from `/actuator/prometheus` every 10 seconds.
+
+![Prometheus targets page showing order-service UP](docs/screenshots/prometheus-target-up.png)
+
+### GitHub Actions – green CI run
+Build, unit tests, Testcontainers integration tests and Docker image on every push, with a test summary on the run page.
+
+![Green GitHub Actions CI run with test summary](docs/screenshots/github-actions-ci-green.png)
+
+### Traffic generator
+`scripts/generate-traffic.ps1` drives orders through their lifecycle and sends some deliberately invalid requests (400 / 404 / 409).
+
+![PowerShell running generate-traffic.ps1](docs/screenshots/generate-traffic-terminal.png)
+
+<sub>To refresh the screenshots: start Docker Desktop and run `powershell -ExecutionPolicy Bypass -File .\scripts\capture-screenshots.ps1`. It starts the stack, generates traffic and captures the terminal, Swagger, Prometheus, Jaeger and CI images (the Grafana image is captured by hand, since Grafana needs a login).</sub>
 
 ## Project layout
 
@@ -229,6 +250,7 @@ src/test/java/                    unit tests (*Test) and Testcontainers integrat
 observability/                    Prometheus config, Grafana datasources + dashboard
 infra/ecs/                        ECS Fargate task definition
 scripts/generate-traffic.ps1      demo traffic for Grafana and Jaeger
+scripts/capture-screenshots.ps1   captures the README screenshots
 .github/workflows/                CI and deploy pipelines
 Dockerfile                        multi-stage, layered jar, non-root, health check
 docker-compose.yml                app + Postgres + Prometheus + Grafana + Jaeger

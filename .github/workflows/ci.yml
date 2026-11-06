@@ -25,6 +25,34 @@ jobs:
       - name: Build and test
         run: mvn -B verify
 
+      # Test counts on the run page (Actions -> run -> Summary)
+      - name: Test summary
+        if: always()
+        run: |
+          python3 - >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          import glob
+          import xml.etree.ElementTree as ET
+          suites = [("Unit tests (JUnit 5 + Mockito)", "target/surefire-reports/TEST-*.xml"),
+                    ("Integration tests (Testcontainers + PostgreSQL)", "target/failsafe-reports/TEST-*.xml")]
+          print("### Test results\n")
+          print("| Suite | Tests | Passed | Failed | Skipped |")
+          print("|---|---:|---:|---:|---:|")
+          total = [0, 0, 0, 0]
+          for name, pattern in suites:
+              t = f = s = 0
+              for path in glob.glob(pattern):
+                  r = ET.parse(path).getroot()
+                  t += int(r.get("tests", 0))
+                  f += int(r.get("failures", 0)) + int(r.get("errors", 0))
+                  s += int(r.get("skipped", 0))
+              p = t - f - s
+              total = [a + b for a, b in zip(total, [t, p, f, s])]
+              print(f"| {name} | {t} | {p} | {f} | {s} |")
+          t, p, f, s = total
+          print(f"| **Total** | **{t}** | **{p}** | **{f}** | **{s}** |")
+          print("\n" + (":white_check_mark: All tests passed" if f == 0 and t > 0 else ":x: Some tests failed"))
+          EOF
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
